@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from keras.layers import Recurrent
+from keras import backend as K
 
-class LSTM(Recurrent):
+class Attention(Recurrent):
     '''Long-Short Term Memory unit - Hochreiter 1997.
 
     For a step-by-step description of the algorithm, see
@@ -35,14 +37,22 @@ class LSTM(Recurrent):
         - [Learning to forget: Continual prediction with LSTM](http://www.mitpressjournals.org/doi/pdf/10.1162/089976600300015015)
         - [Supervised sequence labelling with recurrent neural networks](http://www.cs.toronto.edu/~graves/preprint.pdf)
         - [A Theoretically Grounded Application of Dropout in Recurrent Neural Networks](http://arxiv.org/abs/1512.05287)
+
+    # Notes
+    z - conext vector
+    a bold - annotation vectors i= 1..L corresponding to image features as location i
+    a - positive weight: probability that location i is the right place to focus
+    s_t,i - indicator one hot, t-word, i-location
     '''
     def __init__(self, output_dim,
-                 attention='hard',
+                 attention='stochastic',
                  init='glorot_uniform', inner_init='orthogonal',
                  forget_bias_init='one', activation='tanh',
                  inner_activation='hard_sigmoid',
                  W_regularizer=None, U_regularizer=None, b_regularizer=None,
-                 dropout_W=0., dropout_U=0., **kwargs):
+                 dropout_W=0., dropout_U=0.,
+                 semi_sampling_p=0.5, temperature=1.,
+                 **kwargs):
         self.output_dim = output_dim
         self.init = initializations.get(init)
         self.inner_init = initializations.get(inner_init)
@@ -53,6 +63,9 @@ class LSTM(Recurrent):
         self.U_regularizer = regularizers.get(U_regularizer)
         self.b_regularizer = regularizers.get(b_regularizer)
         self.dropout_W, self.dropout_U = dropout_W, dropout_U
+        self.attention = attention
+        self.semi_sampling_p = semi_sampling_p
+        self.temperature = temperature
 
         if self.dropout_W or self.dropout_U:
             self.uses_learning_phase = True
@@ -170,39 +183,45 @@ class LSTM(Recurrent):
     def step(self, x, states):
         h_tm1 = states[0]
         c_tm1 = states[1]
-        B_U = states[2]
-        B_W = states[3]
+        x_tm1 = states[2]
+        B_U = states[3]
+        B_W = states[4]
 
-        if self.consume_less == 'gpu':
-            z = K.dot(x * B_W[0], self.W) + K.dot(h_tm1 * B_U[0], self.U) + self.b
+        # if self.consume_less == 'gpu':
+        #     z = K.dot(x * B_W[0], self.W) + K.dot(h_tm1 * B_U[0], self.U) + self.b
+        #
+        #     z0 = z[:, :self.output_dim]
+        #     z1 = z[:, self.output_dim: 2 * self.output_dim]
+        #     z2 = z[:, 2 * self.output_dim: 3 * self.output_dim]
+        #     z3 = z[:, 3 * self.output_dim:]
+        #
+        #     i = self.inner_activation(z0)
+        #     f = self.inner_activation(z1)
+        #     c = f * c_tm1 + i * self.activation(z2)
+        #     o = self.inner_activation(z3)
+        # else:
+        #     if self.consume_less == 'cpu':
+        x_i = x[:, :self.output_dim]
+        x_f = x[:, self.output_dim: 2 * self.output_dim]
+        x_c = x[:, 2 * self.output_dim: 3 * self.output_dim]
+        x_o = x[:, 3 * self.output_dim:]
+            # elif self.consume_less == 'mem':
+            #     x_i = K.dot(x * B_W[0], self.W_i) + self.b_i
+            #     x_f = K.dot(x * B_W[1], self.W_f) + self.b_f
+            #     x_c = K.dot(x * B_W[2], self.W_c) + self.b_c
+            #     x_o = K.dot(x * B_W[3], self.W_o) + self.b_o
+            # else:
+            #     raise Exception('Unknown `consume_less` mode.')
 
-            z0 = z[:, :self.output_dim]
-            z1 = z[:, self.output_dim: 2 * self.output_dim]
-            z2 = z[:, 2 * self.output_dim: 3 * self.output_dim]
-            z3 = z[:, 3 * self.output_dim:]
+        i = self.inner_activation(x_i + K.dot(h_tm1 * B_U[0], self.U_i))
+        f = self.inner_activation(x_f + K.dot(h_tm1 * B_U[1], self.U_f))
+        c = f * c_tm1 + i * self.activation(x_c + K.dot(h_tm1 * B_U[2], self.U_c))
+        o = self.inner_activation(x_o + K.dot(h_tm1 * B_U[3], self.U_o))
 
-            i = self.inner_activation(z0)
-            f = self.inner_activation(z1)
-            c = f * c_tm1 + i * self.activation(z2)
-            o = self.inner_activation(z3)
-        else:
-            if self.consume_less == 'cpu':
-                x_i = x[:, :self.output_dim]
-                x_f = x[:, self.output_dim: 2 * self.output_dim]
-                x_c = x[:, 2 * self.output_dim: 3 * self.output_dim]
-                x_o = x[:, 3 * self.output_dim:]
-            elif self.consume_less == 'mem':
-                x_i = K.dot(x * B_W[0], self.W_i) + self.b_i
-                x_f = K.dot(x * B_W[1], self.W_f) + self.b_f
-                x_c = K.dot(x * B_W[2], self.W_c) + self.b_c
-                x_o = K.dot(x * B_W[3], self.W_o) + self.b_o
-            else:
-                raise Exception('Unknown `consume_less` mode.')
+        pctx = K.dot(h_tm1, )
 
-            i = self.inner_activation(x_i + K.dot(h_tm1 * B_U[0], self.U_i))
-            f = self.inner_activation(x_f + K.dot(h_tm1 * B_U[1], self.U_f))
-            c = f * c_tm1 + i * self.activation(x_c + K.dot(h_tm1 * B_U[2], self.U_c))
-            o = self.inner_activation(x_o + K.dot(h_tm1 * B_U[3], self.U_o))
+        h_sampling_mask = K.binomial((1,), p=self.semi_sampling_p, n=1, dtype=x.dtype)
+        alpha = K.softmax(self.temperature * )
 
         h = o * self.activation(c)
         return h, [h, c]
