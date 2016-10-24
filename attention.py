@@ -213,12 +213,18 @@ class Attention(Recurrent):
             # else:
             #     raise Exception('Unknown `consume_less` mode.')
 
+        # input gate
         i = self.inner_activation(x_i + K.dot(h_tm1 * B_U[0], self.U_i))
+        # forget gate
         f = self.inner_activation(x_f + K.dot(h_tm1 * B_U[1], self.U_f))
+        # memory cell
         c = f * c_tm1 + i * self.activation(x_c + K.dot(h_tm1 * B_U[2], self.U_c))
+        # output
         o = self.inner_activation(x_o + K.dot(h_tm1 * B_U[3], self.U_o))
 
-        pctx = K.dot(h_tm1, )
+        proj_ctx = K.dot(h_tm1, self.Wc_att) + self.b_att
+
+        alpha = K.dot(proj_ctx, self.U_att) + self.c_att
 
         h_sampling_mask = K.binomial((1,), p=self.semi_sampling_p, n=1, dtype=x.dtype)
         alpha = K.softmax(self.temperature * )
