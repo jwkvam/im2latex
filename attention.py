@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from keras.layers import Recurrent
+from keras.layers import Recurrent, Dense
+from keras.engine import InputSpec
+from keras import initializations, activations, regularizers
 from keras import backend as K
 
 class Attention(Recurrent):
@@ -53,6 +55,8 @@ class Attention(Recurrent):
                  dropout_W=0., dropout_U=0.,
                  semi_sampling_p=0.5, temperature=1.,
                  **kwargs):
+        # self.h_init = Dense  #(output_dim, input_shape=input_shape[:-1])
+        # self.c_init = Dense  #(output_dim, input_shape=input_shape[:-1])
         self.output_dim = output_dim
         self.init = initializations.get(init)
         self.inner_init = initializations.get(inner_init)
@@ -69,64 +73,54 @@ class Attention(Recurrent):
 
         if self.dropout_W or self.dropout_U:
             self.uses_learning_phase = True
-        super(LSTM, self).__init__(**kwargs)
+        super(Attention, self).__init__(**kwargs)
 
     def build(self, input_shape):
         self.input_spec = [InputSpec(shape=input_shape)]
         self.input_dim = input_shape[2]
 
-        if self.stateful:
-            self.reset_states()
-        else:
-            # initial states: 2 all-zero tensors of shape (output_dim)
-            self.states = [None, None]
+        self.states = [None, None, None]
 
-        if self.consume_less == 'gpu':
-            self.W = self.init((self.input_dim, 4 * self.output_dim),
-                               name='{}_W'.format(self.name))
-            self.U = self.inner_init((self.output_dim, 4 * self.output_dim),
-                                     name='{}_U'.format(self.name))
+        self.Hw_h = self.init((self.input_dim, self.output_dim), name='{}_Hw_h'.format(self.name))
+        self.Hw_c = self.init((self.input_dim, self.output_dim), name='{}_Hw_c'.format(self.name))
+        self.Hb_h = K.zeros((self.output_dim,), name='{}_Hb_h'.format(self.name))
+        self.Hb_c = K.zeros((self.output_dim,), name='{}_Hb_c'.format(self.name))
 
-            self.b = K.variable(np.hstack((np.zeros(self.output_dim),
-                                           K.get_value(self.forget_bias_init((self.output_dim,))),
-                                           np.zeros(self.output_dim),
-                                           np.zeros(self.output_dim))),
-                                name='{}_b'.format(self.name))
-            self.trainable_weights = [self.W, self.U, self.b]
-        else:
-            self.W_i = self.init((self.input_dim, self.output_dim),
-                                 name='{}_W_i'.format(self.name))
-            self.U_i = self.inner_init((self.output_dim, self.output_dim),
-                                       name='{}_U_i'.format(self.name))
-            self.b_i = K.zeros((self.output_dim,), name='{}_b_i'.format(self.name))
+        self.W_i = self.init((self.input_dim, self.output_dim),
+                             name='{}_W_i'.format(self.name))
+        self.U_i = self.inner_init((self.output_dim, self.output_dim),
+                                   name='{}_U_i'.format(self.name))
+        self.b_i = K.zeros((self.output_dim,), name='{}_b_i'.format(self.name))
 
-            self.W_f = self.init((self.input_dim, self.output_dim),
-                                 name='{}_W_f'.format(self.name))
-            self.U_f = self.inner_init((self.output_dim, self.output_dim),
-                                       name='{}_U_f'.format(self.name))
-            self.b_f = self.forget_bias_init((self.output_dim,),
-                                             name='{}_b_f'.format(self.name))
+        self.W_f = self.init((self.input_dim, self.output_dim),
+                             name='{}_W_f'.format(self.name))
+        self.U_f = self.inner_init((self.output_dim, self.output_dim),
+                                   name='{}_U_f'.format(self.name))
+        self.b_f = self.forget_bias_init((self.output_dim,),
+                                         name='{}_b_f'.format(self.name))
 
-            self.W_c = self.init((self.input_dim, self.output_dim),
-                                 name='{}_W_c'.format(self.name))
-            self.U_c = self.inner_init((self.output_dim, self.output_dim),
-                                       name='{}_U_c'.format(self.name))
-            self.b_c = K.zeros((self.output_dim,), name='{}_b_c'.format(self.name))
+        self.W_c = self.init((self.input_dim, self.output_dim),
+                             name='{}_W_c'.format(self.name))
+        self.U_c = self.inner_init((self.output_dim, self.output_dim),
+                                   name='{}_U_c'.format(self.name))
+        self.b_c = K.zeros((self.output_dim,), name='{}_b_c'.format(self.name))
 
-            self.W_o = self.init((self.input_dim, self.output_dim),
-                                 name='{}_W_o'.format(self.name))
-            self.U_o = self.inner_init((self.output_dim, self.output_dim),
-                                       name='{}_U_o'.format(self.name))
-            self.b_o = K.zeros((self.output_dim,), name='{}_b_o'.format(self.name))
+        self.W_o = self.init((self.input_dim, self.output_dim),
+                             name='{}_W_o'.format(self.name))
+        self.U_o = self.inner_init((self.output_dim, self.output_dim),
+                                   name='{}_U_o'.format(self.name))
+        self.b_o = K.zeros((self.output_dim,), name='{}_b_o'.format(self.name))
 
-            self.trainable_weights = [self.W_i, self.U_i, self.b_i,
-                                      self.W_c, self.U_c, self.b_c,
-                                      self.W_f, self.U_f, self.b_f,
-                                      self.W_o, self.U_o, self.b_o]
+        self.trainable_weights = [self.W_i, self.U_i, self.b_i,
+                                  self.W_c, self.U_c, self.b_c,
+                                  self.W_f, self.U_f, self.b_f,
+                                  self.W_o, self.U_o, self.b_o,
+                                  self.Hw_h, self.Hw_c,
+                                  self.Hb_h, self.Hb_c]
 
-            self.W = K.concatenate([self.W_i, self.W_f, self.W_c, self.W_o])
-            self.U = K.concatenate([self.U_i, self.U_f, self.U_c, self.U_o])
-            self.b = K.concatenate([self.b_i, self.b_f, self.b_c, self.b_o])
+        self.W = K.concatenate([self.W_i, self.W_f, self.W_c, self.W_o])
+        self.U = K.concatenate([self.U_i, self.U_f, self.U_c, self.U_o])
+        self.b = K.concatenate([self.b_i, self.b_f, self.b_c, self.b_o])
 
         self.regularizers = []
         if self.W_regularizer:
@@ -142,6 +136,15 @@ class Attention(Recurrent):
         if self.initial_weights is not None:
             self.set_weights(self.initial_weights)
             del self.initial_weights
+
+    def get_initial_states(self, x):
+        xmean = K.mean(x, axis=1)
+        # input_shape = self.input_spec[0].shape
+        # h0 = self.c_init(xmean)
+        # c0 = self.h_init(xmean)
+        h0 = self.inner_activation(K.dot(xmean, self.Hw_h) + self.Hb_h)
+        c0 = self.inner_activation(K.dot(xmean, self.Hw_c) + self.Hb_c)
+        return [h0, c0]
 
     def reset_states(self):
         assert self.stateful, 'Layer must be stateful.'
@@ -159,59 +162,21 @@ class Attention(Recurrent):
                            K.zeros((input_shape[0], self.output_dim))]
 
     def preprocess_input(self, x):
-        if self.consume_less == 'cpu':
-            if 0 < self.dropout_W < 1:
-                dropout = self.dropout_W
-            else:
-                dropout = 0
-            input_shape = self.input_spec[0].shape
-            input_dim = input_shape[2]
-            timesteps = input_shape[1]
+        return x
 
-            x_i = time_distributed_dense(x, self.W_i, self.b_i, dropout,
-                                         input_dim, self.output_dim, timesteps)
-            x_f = time_distributed_dense(x, self.W_f, self.b_f, dropout,
-                                         input_dim, self.output_dim, timesteps)
-            x_c = time_distributed_dense(x, self.W_c, self.b_c, dropout,
-                                         input_dim, self.output_dim, timesteps)
-            x_o = time_distributed_dense(x, self.W_o, self.b_o, dropout,
-                                         input_dim, self.output_dim, timesteps)
-            return K.concatenate([x_i, x_f, x_c, x_o], axis=2)
-        else:
-            return x
+    def step(self, x, states_constants):
+        # TODO need to figure out where states comes from
+        h_tm1 = states_constants[0]
+        c_tm1 = states_constants[1]
+        x_tm1 = states_constants[2]
+        # dropout stuff
+        B_U = states_constants[3]
+        B_W = states_constants[4]
 
-    def step(self, x, states):
-        h_tm1 = states[0]
-        c_tm1 = states[1]
-        x_tm1 = states[2]
-        B_U = states[3]
-        B_W = states[4]
-
-        # if self.consume_less == 'gpu':
-        #     z = K.dot(x * B_W[0], self.W) + K.dot(h_tm1 * B_U[0], self.U) + self.b
-        #
-        #     z0 = z[:, :self.output_dim]
-        #     z1 = z[:, self.output_dim: 2 * self.output_dim]
-        #     z2 = z[:, 2 * self.output_dim: 3 * self.output_dim]
-        #     z3 = z[:, 3 * self.output_dim:]
-        #
-        #     i = self.inner_activation(z0)
-        #     f = self.inner_activation(z1)
-        #     c = f * c_tm1 + i * self.activation(z2)
-        #     o = self.inner_activation(z3)
-        # else:
-        #     if self.consume_less == 'cpu':
-        x_i = x[:, :self.output_dim]
-        x_f = x[:, self.output_dim: 2 * self.output_dim]
-        x_c = x[:, 2 * self.output_dim: 3 * self.output_dim]
-        x_o = x[:, 3 * self.output_dim:]
-            # elif self.consume_less == 'mem':
-            #     x_i = K.dot(x * B_W[0], self.W_i) + self.b_i
-            #     x_f = K.dot(x * B_W[1], self.W_f) + self.b_f
-            #     x_c = K.dot(x * B_W[2], self.W_c) + self.b_c
-            #     x_o = K.dot(x * B_W[3], self.W_o) + self.b_o
-            # else:
-            #     raise Exception('Unknown `consume_less` mode.')
+        x_i = K.dot(x * B_W[0], self.W_i) + self.b_i
+        x_f = K.dot(x * B_W[1], self.W_f) + self.b_f
+        x_c = K.dot(x * B_W[2], self.W_c) + self.b_c
+        x_o = K.dot(x * B_W[3], self.W_o) + self.b_o
 
         # input gate
         i = self.inner_activation(x_i + K.dot(h_tm1 * B_U[0], self.U_i))
@@ -227,10 +192,33 @@ class Attention(Recurrent):
         alpha = K.dot(proj_ctx, self.U_att) + self.c_att
 
         h_sampling_mask = K.binomial((1,), p=self.semi_sampling_p, n=1, dtype=x.dtype)
-        alpha = K.softmax(self.temperature * )
+        # alpha = K.softmax(self.temperature * )
 
         h = o * self.activation(c)
         return h, [h, c]
+
+    def call(self, x, mask=None):
+        # input shape: (nb_samples, time (padded with zeros), input_dim)
+        # note that the .build() method of subclasses MUST define
+        # self.input_spec with a complete input shape.
+        input_shape = self.input_spec[0].shape
+
+        initial_states = self.get_initial_states(x)
+        constants = self.get_constants(x)
+        preprocessed_input = self.preprocess_input(x)
+
+        last_output, outputs, states = K.rnn(self.step, preprocessed_input,
+                                             initial_states,
+                                             go_backwards=self.go_backwards,
+                                             mask=mask,
+                                             constants=constants,
+                                             unroll=self.unroll,
+                                             input_length=input_shape[1])
+
+        if self.return_sequences:
+            return outputs
+        else:
+            return last_output
 
     def get_constants(self, x):
         constants = []
