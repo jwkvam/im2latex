@@ -81,11 +81,6 @@ class Attention(Recurrent):
 
         self.states = [None, None]
 
-        self.Hw_h = self.init((self.input_dim, self.output_dim), name='{}_Hw_h'.format(self.name))
-        self.Hw_c = self.init((self.input_dim, self.output_dim), name='{}_Hw_c'.format(self.name))
-        self.Hb_h = K.zeros((self.output_dim,), name='{}_Hb_h'.format(self.name))
-        self.Hb_c = K.zeros((self.output_dim,), name='{}_Hb_c'.format(self.name))
-
         self.W_i = self.init((self.input_dim, self.output_dim),
                              name='{}_W_i'.format(self.name))
         self.U_i = self.inner_init((self.output_dim, self.output_dim),
@@ -114,9 +109,19 @@ class Attention(Recurrent):
         self.trainable_weights = [self.W_i, self.U_i, self.b_i,
                                   self.W_c, self.U_c, self.b_c,
                                   self.W_f, self.U_f, self.b_f,
-                                  self.W_o, self.U_o, self.b_o,
-                                  self.Hw_h, self.Hw_c,
-                                  self.Hb_h, self.Hb_c]
+                                  self.W_o, self.U_o, self.b_o]
+
+        # weights for initializing hidden and cell states of the LSTM
+        self.Hw_h = self.init((self.input_dim, self.output_dim), name='{}_Hw_h'.format(self.name))
+        self.Hw_c = self.init((self.input_dim, self.output_dim), name='{}_Hw_c'.format(self.name))
+        self.Hb_h = K.zeros((self.output_dim,), name='{}_Hb_h'.format(self.name))
+        self.Hb_c = K.zeros((self.output_dim,), name='{}_Hb_c'.format(self.name))
+
+        self.trainable_weights += [self.Hw_h, self.Hw_c,
+                                   self.Hb_h, self.Hb_c]
+
+        # attention specific weights
+
 
         self.W = K.concatenate([self.W_i, self.W_f, self.W_c, self.W_o])
         self.U = K.concatenate([self.U_i, self.U_f, self.U_c, self.U_o])
