@@ -79,7 +79,7 @@ class Attention(Recurrent):
         self.input_spec = [InputSpec(shape=input_shape)]
         self.input_dim = input_shape[2]
 
-        self.states = [None, None, None]
+        self.states = [None, None]
 
         self.Hw_h = self.init((self.input_dim, self.output_dim), name='{}_Hw_h'.format(self.name))
         self.Hw_c = self.init((self.input_dim, self.output_dim), name='{}_Hw_c'.format(self.name))
@@ -168,10 +168,10 @@ class Attention(Recurrent):
         # TODO need to figure out where states comes from
         h_tm1 = states_constants[0]
         c_tm1 = states_constants[1]
-        x_tm1 = states_constants[2]
+        # x_tm1 = states_constants[2]
         # dropout stuff
-        B_U = states_constants[3]
-        B_W = states_constants[4]
+        B_U = states_constants[2]
+        B_W = states_constants[3]
 
         x_i = K.dot(x * B_W[0], self.W_i) + self.b_i
         x_f = K.dot(x * B_W[1], self.W_f) + self.b_f
