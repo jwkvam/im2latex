@@ -121,6 +121,10 @@ class Attention(Recurrent):
                                    self.Hb_h, self.Hb_c]
 
         # attention specific weights
+        self.Aw = self.init((self.input_dim + self.output_dim, 1), name='{}_Aw'.format(self.name))
+        self.Ab = K.zeros((1,), name='{}_Ab'.format(self.name))
+
+        self.trainable_weights += [self.Aw, self.Ab]
 
 
         self.W = K.concatenate([self.W_i, self.W_f, self.W_c, self.W_o])
@@ -192,11 +196,14 @@ class Attention(Recurrent):
         # output
         o = self.inner_activation(x_o + K.dot(h_tm1 * B_U[3], self.U_o))
 
-        proj_ctx = K.dot(h_tm1, self.Wc_att) + self.b_att
+        # proj_ctx = K.dot(h_tm1, self.Wc_att) + self.b_att
+        x_h = K.concatenate((x, h_tm1))
+        exp = K.dot(x_h, self.Aw) + self.Ab
+        alpha = K.softmax(exp)
 
-        alpha = K.dot(proj_ctx, self.U_att) + self.c_att
-
-        h_sampling_mask = K.binomial((1,), p=self.semi_sampling_p, n=1, dtype=x.dtype)
+        # alpha = K.dot(proj_ctx, self.U_att) + self.c_att
+        #
+        # h_sampling_mask = K.binomial((1,), p=self.semi_sampling_p, n=1, dtype=x.dtype)
         # alpha = K.softmax(self.temperature * )
 
         h = o * self.activation(c)
