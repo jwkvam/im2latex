@@ -210,6 +210,7 @@ class Attention(Recurrent):
         return h, [h, c]
 
     def call(self, x, mask=None):
+        print('hi')
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
