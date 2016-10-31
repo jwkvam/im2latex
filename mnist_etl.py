@@ -22,3 +22,6 @@ features = features.transpose((0, 2, 3, 1))
 
 features = features.reshape((SAMPLES, IMAGE_SIZE, -1), order='F')
 labels = target[ix]
+
+joblib.dump(features, 'features.jbl', compress=3)
+joblib.dump(labels, 'labels.jbl', compress=3)
