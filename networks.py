@@ -30,10 +30,6 @@ def model():
 
     cflat = Reshape((FILTERS, IMAGE_SIZE * N_DIGITS * IMAGE_SIZE))(cfeatures)
 
-    # Repeat
-    # import IPython
-    # IPython.embed()
-
     output = Attention(10, return_sequences=True)(cflat)
 
     model = Model(input=inputs, output=output)
