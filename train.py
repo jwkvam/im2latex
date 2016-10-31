@@ -10,4 +10,8 @@ model = networks.model()
 features = joblib.load('features.jbl')
 labels = joblib.load('labels.jbl')
 
+features = features.reshape(features.shape[0], 1,
+                            features.shape[1],
+                            features.shape[2])
+
 model.fit(features, labels)
