@@ -138,6 +138,7 @@ class Attention(Recurrent):
         if self.U_regularizer:
             self.U_regularizer.set_param(self.U)
             self.regularizers.append(self.U_regularizer)
+
         if self.b_regularizer:
             self.b_regularizer.set_param(self.b)
             self.regularizers.append(self.b_regularizer)
@@ -210,7 +211,6 @@ class Attention(Recurrent):
         return h, [h, c]
 
     def call(self, x, mask=None):
-        print('hi')
         # input shape: (nb_samples, time (padded with zeros), input_dim)
         # note that the .build() method of subclasses MUST define
         # self.input_spec with a complete input shape.
